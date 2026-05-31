@@ -178,7 +178,7 @@ export function registerReadTool(pi: ExtensionAPI): void {
       }
 
       if (file.kind === "binary") {
-        throw new Error(`Path is a binary file: ${rawPath} (${file.description}). Hashline read only supports UTF-8 text files and supported images.`);
+        throw new Error(`Path is a binary file: ${rawPath} (${file.description}). Hashline read only supports text files and supported images.`);
       }
 
       if (file.kind === "image") {
@@ -194,8 +194,17 @@ export function registerReadTool(pi: ExtensionAPI): void {
       });
       const snapshot = await getFileSnapshot(absolutePath);
 
+      // A U+FFFD anywhere in the decoded text means the file held bytes that
+      // are not valid UTF-8 (CP1251, GBK, …). Editing rewrites the whole file
+      // as UTF-8, so those bytes are lost. Warn once on read — the model can
+      // then iconv the file back afterwards. Detect on the full text, not the
+      // paged slice, so an out-of-view bad byte still surfaces.
+      const previewText = normalized.includes("�")
+        ? `${preview.text}\n\n[Non-UTF-8 bytes shown as U+FFFD; editing rewrites the file as UTF-8.]`
+        : preview.text;
+
       return {
-        content: [{ type: "text", text: preview.text }],
+        content: [{ type: "text", text: previewText }],
         details: {
           truncation: preview.truncation,
           // snapshotId remains in details for host UI (e.g. "file changed since
